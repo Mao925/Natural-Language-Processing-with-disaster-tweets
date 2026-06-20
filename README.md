@@ -1,149 +1,66 @@
-# Kaggle NLP Binary Classification Baseline
+# Kaggle NLP Binary Classification: BERT Baseline
 
-## プロジェクト概要
+## 概要
 
-本プロジェクトでは、Kaggle の NLP 二値分類タスクに対して、まずはシンプルで再現性の高いベースラインモデルを構築した。
+本プロジェクトでは、Kaggle の NLP 二値分類タスクに対して、まず `TF-IDF + LogisticRegression` によるベースラインを構築し、その後、2つ目の検証モデルとして `bert-base-uncased` を用いた fine-tuning を行った。
 
-目的は、`text` から `target` を予測することである。
+結果として、`bert-base-uncased` を使用したモデルでは Kaggle Public LB において **0.83152** までスコアが上昇した。
 
-今回のベースラインでは、Transformer や深層学習モデルは使わず、以下の構成を採用した。
-
-- 前処理：TF-IDF 向けの軽いテキストクリーニング
-- 特徴量化：TF-IDF
-- モデル：Logistic Regression
-- 提出ファイル：`submission_tfidf_logreg.csv`
-
-まずは高性能なモデルをいきなり作るのではなく、データの構造を理解し、今後の改善基準となるスコアを作ることを重視した。
+この結果から、単語の表層的な出現頻度を扱う TF-IDF よりも、文脈や単語同士の意味的な関係を捉えられる BERT 系モデルの方が、このタスクに対して高い性能を発揮する可能性が示された。
 
 ---
 
-## 使用データ
+## タスク概要
 
-Google Drive 上に配置した以下の CSV ファイルを使用した。
+### 目的
 
-- `/content/drive/MyDrive/Kaggle/NLP/train.csv`
-- `/content/drive/MyDrive/Kaggle/NLP/test.csv`
+`text` の内容から `target` を予測する二値分類タスク。
+
+### 使用データ
+
+- `train.csv`
+- `test.csv`
 
 ### train.csv のカラム
 
 | カラム名 | 内容 |
 |---|---|
 | id | 各データのID |
-| keyword | 投稿に紐づくキーワード |
+| keyword | テキストに関連するキーワード |
 | location | 投稿者の位置情報 |
 | text | 投稿本文 |
-| target | 目的変数。二値分類ラベル |
+| target | 目的変数 |
 
 ### test.csv のカラム
 
 | カラム名 | 内容 |
 |---|---|
 | id | 各データのID |
-| keyword | 投稿に紐づくキーワード |
+| keyword | テキストに関連するキーワード |
 | location | 投稿者の位置情報 |
 | text | 投稿本文 |
 
 ---
 
-## タスク設定
+## これまでの検証モデル
 
-このタスクでは、`text` の内容から `target` を予測する。
+### 1. TF-IDF + LogisticRegression
 
-分類タスクとしては二値分類であり、`target` は以下のような値を取る。
+最初のベースラインとして、`TfidfVectorizer` と `LogisticRegression` を組み合わせたモデルを構築した。
 
-| target | 意味 |
-|---|---|
-| 0 | クラス0 |
-| 1 | クラス1 |
+#### 特徴
 
-今回の目的は、まず `input_text` から `target` を予測するベースラインを作成することである。
+- 実装が簡単
+- 学習が高速
+- 解釈しやすい
+- ベースラインとして優秀
+- 小規模データでも安定しやすい
 
----
+#### 使用した特徴量
 
-## 前処理方針
+`keyword_clean` と `text_clean` を結合した `input_text` を使用。
 
-今回のベースラインでは、Transformer 向けの前処理ではなく、TF-IDF + LogisticRegression 向けの前処理を行った。
-
-TF-IDF では、過剰にテキストを加工しすぎると有用な語彙情報まで失われる可能性がある。そのため、stopwords 除去、stemming、lemmatization などの強い正規化は行わず、軽いクリーニングに留めた。
-
-### 実施した前処理
-
-- `train.csv` と `test.csv` を読み込み
-- `keyword` の欠損値を空文字 `""` で補完
-- `text` の欠損値も念のため空文字 `""` で補完
-- `location` は欠損が多く、ノイズも多いと判断し、最初のベースラインでは使用しない
-- `text` に対して軽いクリーニングを実施
-  - HTMLエスケープを戻す
-  - URLエンコードを戻す
-  - 小文字化
-  - URLを `<url>` に置換
-  - メンションを `<user>` に置換
-  - ハッシュタグは `#` のみ削除し、単語自体は残す
-  - 連続する空白を1つにまとめる
-  - 前後の空白を削除
-- `keyword` にも同じ軽いクリーニングを適用
-- `keyword_clean` と `text_clean` を結合し、`input_text` を作成
-
----
-
-## 前処理後のデータ
-
-前処理後、以下のデータフレームを作成した。
-
-### train_processed
-
-| カラム名 | 内容 |
-|---|---|
-| id | 元データのID |
-| keyword | 元のキーワード |
-| location | 元の位置情報 |
-| text | 元の本文 |
-| target | 目的変数 |
-| keyword_clean | クリーニング後のキーワード |
-| text_clean | クリーニング後の本文 |
-| input_text | keyword_clean と text_clean を結合した学習用テキスト |
-
-### test_processed
-
-| カラム名 | 内容 |
-|---|---|
-| id | 元データのID |
-| keyword | 元のキーワード |
-| location | 元の位置情報 |
-| text | 元の本文 |
-| keyword_clean | クリーニング後のキーワード |
-| text_clean | クリーニング後の本文 |
-| input_text | keyword_clean と text_clean を結合した予測用テキスト |
-
----
-
-## ベースラインモデル
-
-今回のベースラインモデルには、以下を使用した。
-
-- `TfidfVectorizer`
-- `LogisticRegression`
-- `Pipeline`
-
-モデル構築では、`train_processed["input_text"]` を説明変数、`train_processed["target"]` を目的変数として使用した。
-
-### データ分割
-
-学習データと検証データは、以下の条件で分割した。
-
-| 項目 | 設定 |
-|---|---|
-| test_size | 0.2 |
-| stratify | y |
-| random_state | 42 |
-
-`stratify=y` を指定することで、学習データと検証データで target の分布が大きく崩れないようにした。
-
----
-
-## TF-IDF の設定
-
-`TfidfVectorizer` では、word ベースの TF-IDF を使用した。
+#### TF-IDF の主な設定
 
 | パラメータ | 設定 |
 |---|---|
@@ -152,21 +69,7 @@ TF-IDF では、過剰にテキストを加工しすぎると有用な語彙情�
 | max_df | 0.95 |
 | sublinear_tf | True |
 
-### 設定意図
-
-`ngram_range=(1, 2)` により、単語単体だけでなく、2語の並びも特徴量として扱う。
-
-`min_df=2` により、1回しか出現しない極端にレアな語を除外する。
-
-`max_df=0.95` により、ほぼ全体に出現するような情報量の少ない語を除外する。
-
-`sublinear_tf=True` により、単語頻度の影響を対数スケールに変換し、頻出語の影響が強くなりすぎることを抑える。
-
----
-
-## Logistic Regression の設定
-
-`LogisticRegression` では、以下の設定を使用した。
+#### LogisticRegression の主な設定
 
 | パラメータ | 設定 |
 |---|---|
@@ -174,247 +77,323 @@ TF-IDF では、過剰にテキストを加工しすぎると有用な語彙情�
 | C | 1.0 |
 | random_state | 42 |
 
-### 設定意図
+#### 課題
 
-`max_iter=1000` にすることで、学習が収束しやすいようにした。
+TF-IDF は単語の出現頻度をもとに特徴量を作るため、文脈や単語同士の意味的な近さを直接扱うことができない。
 
-`C=1.0` は正則化の標準的な設定であり、まずはベースラインとして採用した。
+たとえば、意味的には近い単語であっても、表記が異なれば別の特徴量として扱われる。また、否定表現や文全体のニュアンス、単語の並びによる意味変化を捉えることが難しい。
 
-`random_state=42` により、実験の再現性を確保した。
+そのため、一定のスコアまでは出やすい一方で、そこから先は頭打ちになりやすいと考えられる。
 
 ---
 
-## 評価指標
+### 2. bert-base-uncased
 
-検証データに対して、以下の指標を確認した。
+2つ目の検証モデルとして、`bert-base-uncased` を使用した。
+
+#### 結果
+
+| モデル | Public LB |
+|---|---:|
+| bert-base-uncased | 0.83152 |
+
+`TF-IDF + LogisticRegression` と比較して、BERT 系モデルを用いることでスコアが上昇した。
+
+---
+
+## BERT 用の前処理方針
+
+BERT では、TF-IDF のように人間側で強く単語を整えるのではなく、できるだけ元の文章情報を残し、Tokenizer と事前学習済みモデルに任せる方針を取った。
+
+### 実施した前処理
+
+- `keyword` の欠損値を空文字で補完
+- `text` の欠損値を空文字で補完
+- HTML エスケープを戻す
+- URL エンコードを戻す
+- URL を `url` に置換
+- メンションを `user` に置換
+- 連続する空白を1つにまとめる
+- 前後の空白を削除する
+- `location` は今回も使用しない
+
+### 実施しなかった前処理
+
+- stopwords 除去
+- stemming
+- lemmatization
+- 強い記号削除
+- 明示的な小文字化
+
+`bert-base-uncased` は tokenizer 側で小文字化を行うため、前処理段階では明示的な小文字化を行わなかった。
+
+---
+
+## BERT の入力形式
+
+今回の BERT モデルでは、`keyword` と `text` を sentence pair として tokenizer に渡した。
+
+概念的には、以下のような入力になる。
+
+| 入力要素 | 内容 |
+|---|---|
+| sentence 1 | keyword |
+| sentence 2 | text |
+
+BERT 内部では、概ね以下のような形式で扱われる。
+
+`[CLS] keyword [SEP] text [SEP]`
+
+これにより、単に `keyword` と `text` を文字列結合するのではなく、BERT の sentence pair 入力として自然に扱うことができる。
+
+---
+
+## 学習設定
+
+### 使用モデル
+
+| 項目 | 設定 |
+|---|---|
+| model_name | bert-base-uncased |
+| num_labels | 2 |
+| max_length | 128 |
+| optimizer | Trainer のデフォルト |
+| learning_rate | 2e-5 |
+| weight_decay | 0.01 |
+| epochs | 3 |
+| batch_size | 16 |
+| eval_batch_size | 32 |
+| random_state | 42 |
+
+### 検証方法
+
+学習データを `train_test_split` で分割した。
+
+| 項目 | 設定 |
+|---|---|
+| test_size | 0.2 |
+| stratify | target |
+| random_state | 42 |
+
+評価指標として以下を確認した。
 
 - accuracy
-- f1_score
+- f1
 - classification_report
 - confusion_matrix
 
-今回のタスクでは二値分類であり、クラスごとの precision / recall / f1-score も確認する必要があるため、`classification_report` を表示した。
+---
 
-また、どちらのクラスをどのように間違えているかを見るために、`confusion_matrix` も確認した。
+## なぜ BERT でスコアが上がったと考えられるか
+
+### 1. TF-IDF は単語の出現頻度ベース
+
+TF-IDF は、ある単語が文書内でどれだけ重要かを、出現頻度と文書全体での希少性から計算する。
+
+そのため、シンプルで強力ではあるが、基本的には単語を独立した特徴量として扱う。
+
+つまり、以下のような情報は捉えにくい。
+
+- 単語同士の意味的な近さ
+- 文脈による意味の変化
+- 否定表現
+- 皮肉や比喩
+- 語順によるニュアンス
+- 文全体の意味
+
+### 2. BERT は文脈を考慮できる
+
+BERT は Transformer Encoder をベースとした事前学習済み言語モデルである。
+
+Transformer の Self-Attention 機構により、文中の各単語が他の単語とどのように関係しているかを考慮しながら表現を作ることができる。
+
+そのため、BERT は単語を単体で見るのではなく、文脈の中で意味を捉えることができる。
+
+たとえば、同じ単語であっても、周囲の単語によって意味が変わる場合がある。BERT はこのような文脈依存の意味表現を扱えるため、TF-IDF よりも高い精度を出しやすいと考えられる。
+
+### 3. 事前学習済みモデルの知識を利用できる
+
+`bert-base-uncased` は、大規模なテキストコーパスで事前学習されている。
+
+そのため、今回の Kaggle データだけから学習するのではなく、事前学習で獲得した一般的な言語理解能力を利用できる。
+
+小規模から中規模の NLP タスクでは、この事前学習済みの知識が大きな効果を持つ。
+
+今回のタスクでも、BERT が事前学習によって獲得した文脈理解能力が、分類精度の向上につながったと考えられる。
 
 ---
 
-## 提出ファイル
+## 現時点の仮説
 
-学習済みモデルを使って `test_processed["input_text"]` に対して予測を行い、Kaggle 提出用 CSV を作成した。
+今回、`bert-base-uncased` によってスコアが **0.83152** まで上昇した。
 
-提出ファイル名は以下。
+この結果から、以下の仮説が立てられる。
 
-`submission_tfidf_logreg.csv`
+### 仮説1
 
-提出ファイルの形式は以下。
+このタスクでは、単語の出現頻度だけでなく、文脈や単語同士の意味的な関係が重要である。
 
-| カラム名 | 内容 |
+そのため、TF-IDF よりも Transformer ベースのモデルの方が高い精度を出しやすい。
+
+### 仮説2
+
+BERT の Self-Attention 機構により、文中の単語間の関係を考慮できることが、今回のスコア向上に寄与している。
+
+### 仮説3
+
+`bert-base-uncased` よりも事前学習方法が改善されている RoBERTa を使用すれば、さらに高い精度が出る可能性がある。
+
+---
+
+## 次に検証したいモデル: RoBERTa
+
+次の検証候補として、`roberta-base` を試す。
+
+RoBERTa は BERT をベースにしつつ、事前学習の方法を改善したモデルである。
+
+### RoBERTa に期待する理由
+
+- BERT よりも強力な事前学習設定を持つ
+- 動的マスキングなどにより、より汎用的な言語表現を獲得している
+- NSP を使わない事前学習により、より自然な文脈表現を学習している
+- NLP 分類タスクで BERT より高い性能を出すことが多い
+
+そのため、今回のような短文ベースの二値分類タスクでも、`bert-base-uncased` より高いスコアが出る可能性がある。
+
+---
+
+## RoBERTa 検証時の注意点
+
+RoBERTa では BERT と tokenizer の仕様が異なる。
+
+そのため、以下の点に注意する。
+
+### 1. token_type_ids を使わない
+
+BERT では sentence pair に対して `token_type_ids` が使われる。
+
+一方、RoBERTa では通常 `token_type_ids` を使用しない。
+
+そのため、Dataset 側では `encoding` に `token_type_ids` が存在する場合のみ渡す実装にしておくと安全である。
+
+### 2. 前処理を強くしすぎない
+
+RoBERTa でも、BERT と同様に過剰な前処理は避ける。
+
+特に以下は行わない。
+
+- stopwords 除去
+- stemming
+- lemmatization
+- 強い記号削除
+
+### 3. max_length はまず 128 でよい
+
+今回のデータは短文中心であるため、最初は `max_length=128` で十分だと考えられる。
+
+必要に応じて、以下を比較する。
+
+- max_length=128
+- max_length=160
+- max_length=192
+
+### 4. 学習率は BERT と同じく 2e-5 から始める
+
+まずは BERT と条件を揃えて比較するため、以下の設定で開始する。
+
+| 項目 | 設定 |
 |---|---|
-| id | test.csv の id |
-| target | 予測ラベル |
+| learning_rate | 2e-5 |
+| epochs | 3 |
+| batch_size | 16 |
+| weight_decay | 0.01 |
 
-CSV 保存時には、Kaggle の提出形式を崩さないように `index=False` を指定した。
+その後、必要に応じて以下を試す。
 
-### 作成された提出ファイルの形状
+- learning_rate=1e-5
+- learning_rate=2e-5
+- learning_rate=3e-5
+- epochs=2
+- epochs=3
+- epochs=4
 
-`submission_tfidf_logreg.csv` の shape は以下。
+---
 
-| rows | columns |
-|---:|---:|
-| 3263 | 2 |
+## 今後の実験方針
 
-### 予測ラベルの分布
+今後は、以下の順番で検証を進める。
 
-今回のベースラインモデルによる test データへの予測分布は以下。
+### 1. bert-base-uncased の結果を基準として記録する
 
-| target | proportion |
+現在のベストスコア。
+
+| モデル | Public LB |
 |---|---:|
-| 0 | 約 0.651 |
-| 1 | 約 0.349 |
+| bert-base-uncased | 0.83152 |
 
----
+このスコアを次のモデルの比較基準とする。
 
-## 現時点での到達点
+### 2. roberta-base を検証する
 
-この時点で、以下の流れを一通り構築できた。
+BERT と同じデータ分割、同じ評価指標で検証する。
 
-1. Google Drive から train.csv / test.csv を読み込む
-2. データの中身、欠損値、カラム、目的変数の分布を確認する
-3. TF-IDF 向けの軽いテキスト前処理を行う
-4. `input_text` を作成する
-5. TF-IDF + LogisticRegression の Pipeline を作成する
-6. train / valid に分割して検証する
-7. accuracy / f1_score / classification_report / confusion_matrix を確認する
-8. test データに対して予測する
-9. Kaggle 提出用 CSV を作成する
+比較する観点は以下。
 
-今回の目的である「前処理コード」と「ベースライン学習コード」の分離は達成できた。
+- validation accuracy
+- validation f1
+- Public LB
+- 予測ラベルの分布
+- confusion matrix
 
----
+### 3. ハイパーパラメータを調整する
 
-## 今回の学び
+RoBERTa で改善が見られた場合、以下を調整する。
 
-### 1. NLPタスクでは、まず軽い前処理で十分にベースラインを作れる
+- learning_rate
+- epochs
+- batch_size
+- max_length
+- weight_decay
+- threshold
 
-最初から Transformer や複雑な特徴量エンジニアリングに進むのではなく、TF-IDF + LogisticRegression でも十分に比較基準となるモデルを作れる。
+### 4. threshold tuning を行う
 
-特に、Kaggle の NLP 二値分類では、まず以下のような構成を作ることが重要だと分かった。
+現在は `argmax` によって予測ラベルを決定している。
 
-- 入力テキストの確認
-- 欠損値処理
-- 軽いクリーニング
-- TF-IDF
-- 線形モデル
-- 検証スコア確認
-- 提出ファイル作成
+今後は `predict_proba` 相当の確率値を使い、閾値を調整することで F1 score の改善を狙う。
 
-### 2. 前処理をやりすぎないことも重要
+候補は以下。
 
-TF-IDF では、単語そのものが特徴量になる。
+| threshold |
+|---:|
+| 0.35 |
+| 0.40 |
+| 0.45 |
+| 0.50 |
+| 0.55 |
+| 0.60 |
 
-そのため、stopwords 除去、stemming、lemmatization を最初から行うと、分類に効く情報を失う可能性がある。
+### 5. アンサンブルを検討する
 
-今回は、以下のような軽い処理に留めた。
+BERT と RoBERTa の予測傾向が異なる場合、アンサンブルによって性能が上がる可能性がある。
 
-- 小文字化
-- URL置換
-- メンション置換
-- ハッシュタグ記号の削除
-- 空白整理
+候補は以下。
 
-この方針により、元テキストの情報をできるだけ残しながら、ノイズを軽く減らすことができた。
-
-### 3. keyword は使う価値がある
-
-`keyword` は欠損があるものの、投稿に関連する重要語として使える可能性がある。
-
-そのため、欠損値を空文字で補完した上で、`text` と結合して `input_text` を作成した。
-
-一方で、`location` は欠損が多く、表記ゆれやノイズも多いと考えられるため、最初のベースラインでは使用しなかった。
-
-### 4. Pipeline を使うと実験管理がしやすい
-
-`TfidfVectorizer` と `LogisticRegression` を `Pipeline` でまとめることで、前処理から学習までの流れを一体化できた。
-
-これにより、今後以下のような改善を行う際にも管理しやすくなる。
-
-- TF-IDF のパラメータ変更
-- LogisticRegression の C 調整
-- class_weight の追加
-- char-level TF-IDF の追加
-- FeatureUnion による特徴量結合
-
-### 5. Kaggle提出用CSVの作成まで一気通貫で確認できた
-
-モデルを作るだけでなく、最終的に以下の形式で提出CSVを作成できた。
-
-| id | target |
-|---|---|
-
-Kaggle では、モデルの検証だけでなく、提出ファイルの形式が正しいことも重要である。
-
-今回、`submission.head()` と `submission.shape` を確認したことで、提出形式の崩れがないことを確認できた。
-
----
-
-## 今後の改善候補
-
-### 1. LogisticRegression の C を調整する
-
-現在は `C=1.0` を使用している。
-
-今後は以下のような値を試す。
-
-- C=0.3
-- C=0.5
-- C=1.0
-- C=2.0
-- C=3.0
-- C=5.0
-
-`C` は正則化の強さに関わるパラメータである。
-
-小さいほど正則化が強くなり、大きいほど正則化が弱くなる。
-
-### 2. class_weight="balanced" を試す
-
-target の分布に偏りがある場合、`class_weight="balanced"` が有効な可能性がある。
-
-特に、片方のクラスの recall が低い場合には試す価値がある。
-
-### 3. char-level TF-IDF を試す
-
-word-level TF-IDF だけでなく、文字 n-gram ベースの TF-IDF も有効な可能性がある。
-
-候補設定は以下。
-
-- analyzer="char_wb"
-- ngram_range=(3, 5)
-
-char-level TF-IDF は、誤字、表記ゆれ、未知語、短文に対して強い可能性がある。
-
-### 4. word TF-IDF と char TF-IDF を結合する
-
-`FeatureUnion` を用いて、word-level TF-IDF と char-level TF-IDF を結合する。
-
-これにより、単語単位の意味情報と、文字単位の表記パターンの両方を使える。
-
-### 5. threshold 調整を行う
-
-現在は `model.predict()` によるデフォルトの閾値で予測している。
-
-今後は `predict_proba()` を使い、閾値を調整することで F1 score を改善できる可能性がある。
-
-例：
-
-- threshold=0.35
-- threshold=0.40
-- threshold=0.45
-- threshold=0.50
-- threshold=0.55
-
-### 6. 前処理の改善
-
-現在はかなり軽い前処理にしている。
-
-今後は、スコアを見ながら以下を検討する。
-
-- 記号の扱いを調整する
-- 数字を残すか置換するか検討する
-- 絵文字の扱いを検討する
-- 短縮表現の正規化を検討する
-- URLやメンションを削除するパターンも試す
-
-ただし、前処理を強くしすぎると情報が失われる可能性があるため、必ず検証スコアを見ながら判断する。
-
----
-
-## 次にやること
-
-次は、今回のベースラインを基準として、以下の順番で改善を進める。
-
-1. 現在の validation score と Kaggle Public LB を記録する
-2. LogisticRegression の C を調整する
-3. `class_weight="balanced"` を試す
-4. char-level TF-IDF を試す
-5. word TF-IDF + char TF-IDF の結合を試す
-6. threshold 調整を行う
-7. 改善結果を README.md に追記する
+- BERT + RoBERTa の確率平均
+- BERT + TF-IDF LogisticRegression の確率平均
+- RoBERTa + TF-IDF LogisticRegression の確率平均
+- 複数 seed の平均
 
 ---
 
 ## 現時点の結論
 
-今回、Kaggle NLP 二値分類タスクに対して、TF-IDF + LogisticRegression による最初のベースラインを構築できた。
+`TF-IDF + LogisticRegression` は高速で強いベースラインとして有効だった。
 
-このベースラインは、以下の点で今後の改善の土台になる。
+しかし、今回 `bert-base-uncased` を使用したことで Public LB が **0.83152** まで上昇したことから、このタスクでは文脈理解や単語同士の意味的な関係が重要である可能性が高い。
 
-- シンプルで理解しやすい
-- 実行が速い
-- 再現性がある
-- 前処理と学習コードが分離されている
-- Kaggle 提出用 CSV まで作成できる
-- 改善実験の比較基準として使える
+BERT は Transformer の Self-Attention 機構によって文中の単語間の関係を捉えることができ、さらに大規模コーパスでの事前学習によって一般的な言語理解能力を持っている。
 
-今後は、このベースラインを崩さずに、パラメータ調整や特徴量追加によってスコア改善を狙う。
+そのため、単語の出現頻度を中心に扱う TF-IDF よりも高い精度を出せたと考えられる。
+
+次の検証では、BERT よりも事前学習が改善されている `roberta-base` を使用し、さらなるスコア向上を狙う。
